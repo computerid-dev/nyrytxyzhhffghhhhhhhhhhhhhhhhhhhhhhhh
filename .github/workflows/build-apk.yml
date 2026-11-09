@@ -1,0 +1,130 @@
+name: Build APK
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Generate project Android
+        run: |
+          npx cap add android
+          npx cap sync android
+
+      - name: Set versionCode dan versionName
+        run: |
+          GRADLE=android/app/build.gradle
+          sed -i -E "s/versionCode [0-9]+/versionCode ${{ github.run_number }}/" "$GRADLE"
+          sed -i -E "s/versionName \"[^\"]*\"/versionName \"1.0.${{ github.run_number }}\"/" "$GRADLE"
+          grep -n "versionCode\|versionName" "$GRADLE"
+
+      - name: Cek Secrets keystore
+        id: keys
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ] || [ -z "$KEYSTORE_PASSWORD" ] || [ -z "$KEY_ALIAS" ] || [ -z "$KEY_PASSWORD" ]; then
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Secrets keystore kosong. APK debug dibuat dan TIDAK BOLEH dirilis. Isi 4 Secrets dulu."
+            {
+              echo "## PERINGATAN"
+              echo "Secrets keystore kosong. Hasil build ini APK DEBUG (kunci sementara)."
+              echo "Jangan dirilis, karena tidak bisa menimpa versi rilis."
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "signed=true" >> "$GITHUB_OUTPUT"
+            echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
+          fi
+
+      - name: Pasang signing config (rilis)
+        if: steps.keys.outputs.signed == 'true'
+        run: |
+          cat >> android/app/build.gradle <<'GRADLE'
+
+          android {
+              signingConfigs {
+                  release {
+                      storeFile file(System.getenv("KEYSTORE_PATH"))
+                      storePassword System.getenv("KEYSTORE_PASSWORD")
+                      keyAlias System.getenv("KEY_ALIAS")
+                      keyPassword System.getenv("KEY_PASSWORD")
+                  }
+              }
+              buildTypes {
+                  release {
+                      signingConfig signingConfigs.release
+                  }
+              }
+          }
+          GRADLE
+
+      - name: Build APK rilis
+        if: steps.keys.outputs.signed == 'true'
+        working-directory: android
+        env:
+          KEYSTORE_PATH: ${{ runner.temp }}/release.jks
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleRelease
+
+      - name: Build APK debug (Secrets kosong)
+        if: steps.keys.outputs.signed != 'true'
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+      - name: Siapkan file APK
+        id: apk
+        run: |
+          mkdir -p out
+          if [ "${{ steps.keys.outputs.signed }}" = "true" ]; then
+            cp android/app/build/outputs/apk/release/app-release.apk out/youtube-scraper.apk
+            echo "name=youtube-scraper-apk" >> "$GITHUB_OUTPUT"
+          else
+            cp android/app/build/outputs/apk/debug/app-debug.apk out/youtube-scraper-DEBUG-JANGAN-DIRILIS.apk
+            echo "name=youtube-scraper-apk-DEBUG-JANGAN-DIRILIS" >> "$GITHUB_OUTPUT"
+          fi
+          ls -l out
+
+      - name: Cetak sidik jari SHA-256
+        run: |
+          APKSIGNER=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)/apksigner
+          {
+            echo "## Sidik jari sertifikat"
+            echo "Package: com.nyr.ytscraper  |  versionCode: ${{ github.run_number }}"
+            echo '```'
+            "$APKSIGNER" verify --print-certs out/*.apk | grep -i "SHA-256"
+            echo '```'
+            echo "SHA-256 harus SAMA dengan build sebelumnya. Kalau beda, update akan ditolak Android."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.apk.outputs.name }}
+          path: out/*.apk
