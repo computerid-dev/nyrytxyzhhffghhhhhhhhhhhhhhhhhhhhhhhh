@@ -1,0 +1,8 @@
+{
+  "appId": "com.nyr.ytscraper",
+  "appName": "YT Scraper",
+  "webDir": "www",
+  "server": {
+    "androidScheme": "https"
+  }
+}
