@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>YT Scraper Tester</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <main class="page">
+    <header class="page__header">
+      <h1>YT Scraper Tester</h1>
+      <p>Uji scraper YouTube. Butuh koneksi internet untuk mengambil data.</p>
+      <p id="mode-info" class="badge">Mode: memeriksa...</p>
+    </header>
+
+    <form id="scrape-form" class="panel" novalidate>
+      <div class="field">
+        <label for="tool">Scraper</label>
+        <select id="tool" name="tool">
+          <option value="ytmp3">ytmp3</option>
+          <option value="ytmp3gg">ytmp3gg</option>
+          <option value="playlist">playlist</option>
+          <option value="playyoutube">playyoutube (cari lalu MP3)</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label for="input" id="input-label">Link video YouTube</label>
+        <input id="input" name="input" type="text" autocomplete="off" required>
+      </div>
+
+      <div class="field" id="format-field">
+        <label for="format">Format</label>
+        <select id="format" name="format">
+          <option value="mp3">mp3</option>
+          <option value="mp4">mp4</option>
+        </select>
+      </div>
+
+      <button id="submit" class="button" type="submit">Jalankan</button>
+    </form>
+
+    <section class="panel" aria-live="polite">
+      <h2>Hasil</h2>
+      <p id="status" class="status">Belum ada permintaan.</p>
+      <pre id="output" class="output"></pre>
+    </section>
+  </main>
+
+  <!-- Urutan penting: http.js harus pertama, index.js terakhir -->
+  <script src="js/scraper/http.js"></script>
+  <script src="js/scraper/ytmp3.js"></script>
+  <script src="js/scraper/ytmp3gg.js"></script>
+  <script src="js/scraper/playlist.js"></script>
+  <script src="js/scraper/playyoutube.js"></script>
+  <script src="js/scraper/index.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
