@@ -89,14 +89,28 @@ jobs:
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
           chmod +x gradlew
-          ./gradlew assembleRelease
+          sed -i 's/^networkTimeout=.*/networkTimeout=120000/' gradle/wrapper/gradle-wrapper.properties
+          for i in 1 2 3; do
+            if ./gradlew assembleRelease; then exit 0; fi
+            echo "::warning::Percobaan $i gagal (kemungkinan jaringan). Mengulang..."
+            sleep 20
+          done
+          echo "Build gagal setelah 3 percobaan."
+          exit 1
 
       - name: Build APK debug (Secrets kosong)
         if: steps.keys.outputs.signed != 'true'
         working-directory: android
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug
+          sed -i 's/^networkTimeout=.*/networkTimeout=120000/' gradle/wrapper/gradle-wrapper.properties
+          for i in 1 2 3; do
+            if ./gradlew assembleDebug; then exit 0; fi
+            echo "::warning::Percobaan $i gagal (kemungkinan jaringan). Mengulang..."
+            sleep 20
+          done
+          echo "Build gagal setelah 3 percobaan."
+          exit 1
 
       - name: Siapkan file APK
         id: apk
